@@ -34,6 +34,28 @@ Tests live in [tests/](tests/):
 - `test_extractor.py`, `test_producer.py`, `test_databricks_loader.py` —
   mock tests: HTTP calls, the Kafka producer, and the Databricks connection
   are all patched, so the suite never hits a real API, broker, or warehouse.
+- `test_unittest_suite.py` — the same transformation/validation logic,
+  exercised with a plain `unittest.TestCase` suite (no pytest fixtures), to
+  prove the tests aren't tied to the pytest runner:
+
+  ```bash
+  python -m unittest discover tests
+  ```
+
+## Local end-to-end run (proves the pipeline processes real data)
+
+`fakestore_pipeline.py` is the production DAG — it streams validated
+products through Kafka into Databricks, so running it needs those
+credentials configured. To see the extract -> validate -> transform logic
+process real data end-to-end without any of that infrastructure:
+
+```bash
+python run_local.py
+```
+
+This calls the live FakeStore API, validates and transforms every product,
+and writes the result to `data/output.csv` (gitignored — it's a generated
+run artifact, not source, same as `logs/` and `failed_records/`).
 
 ## Continuous Integration
 

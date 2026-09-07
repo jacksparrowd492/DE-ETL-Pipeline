@@ -20,6 +20,8 @@ logs/*
 !logs/.gitkeep
 failed_records/*.json
 !failed_records/.gitkeep
+data/*.csv
+!data/.gitkeep
 
 # Editors / OS
 .vscode/
