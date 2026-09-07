@@ -191,3 +191,13 @@ def test_transform_product_missing_description_and_image_default_empty():
 
     assert result["product_description"] == ""
     assert result["image_url"] == ""
+
+
+def test_transform_product_casts_string_id_to_int():
+    # Kafka round-trips (JSON) can hand ids back as strings; product_id
+    # must still come out as an int for the bronze/silver INT column.
+    product = {"id": "8", "title": "String Id", "price": 3.0, "category": "electronics"}
+    result = transform_product(product)
+
+    assert result["product_id"] == 8
+    assert isinstance(result["product_id"], int)
