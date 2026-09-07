@@ -209,6 +209,65 @@ def inject_custom_css():
             box-shadow: 0 0 0 3px rgba(57,135,229,0.30) !important;
             border-color: var(--accent-blue) !important;
         }
+
+        /* Section headings (st.subheader) — brand font, tighter tracking */
+        h2, h3 { font-family: 'Poppins', sans-serif; letter-spacing: -0.01em; }
+
+        /* Pipeline flow diagram */
+        .pipeline-flow {
+            display: flex;
+            align-items: stretch;
+            flex-wrap: wrap;
+            gap: 2px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px 16px 16px;
+            box-shadow: var(--shadow-soft);
+        }
+        .stage {
+            flex: 1 1 118px;
+            min-width: 110px;
+            text-align: center;
+            padding: 6px 8px;
+            border-radius: 10px;
+            transition: background 0.15s ease;
+        }
+        .stage:hover { background: rgba(255,255,255,0.05); }
+        .stage-icon { font-size: 21px; line-height: 1.3; }
+        .stage-title {
+            font-family: 'Poppins', sans-serif;
+            font-weight: 600;
+            font-size: 12.5px;
+            color: var(--text-primary);
+            margin-top: 2px;
+        }
+        .stage-sub {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 2px;
+            line-height: 1.35;
+        }
+        .stage-arrow {
+            flex: 0 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            font-size: 15px;
+            padding: 0 2px;
+        }
+        .pipeline-branch-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 10px;
+            padding: 8px 12px;
+            border-top: 1px dashed var(--border);
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        .status-dot { font-weight: 700; }
         </style>
         """,
         unsafe_allow_html=True,
@@ -289,6 +348,54 @@ def category_color_map(categories):
     color across every chart on the page."""
     cats = sorted(set(categories))
     return {c: CATEGORY_PALETTE[i % len(CATEGORY_PALETTE)] for i, c in enumerate(cats)}
+
+
+# Status palette (fixed, never themed — see dataviz skill) used only for the
+# replay-queue state below the pipeline flow diagram.
+STATUS_GOOD = "#0ca30c"
+STATUS_WARNING = "#fab219"
+
+
+def render_pipeline_flow(bronze_count, total_products, gold_rows, failed_count, kafka_topic, kafka_available):
+    """Renders the extract -> validate -> Kafka -> transform -> load ->
+    warehouse -> dashboard architecture as a connected flow diagram,
+    annotated with a few live counts already loaded elsewhere on the page.
+    Purely presentational — no data access of its own."""
+
+    def stage(icon, title, sub):
+        return f'''<div class="stage">
+            <div class="stage-icon">{icon}</div>
+            <div class="stage-title">{title}</div>
+            <div class="stage-sub">{sub}</div>
+        </div>'''
+
+    arrow = '<div class="stage-arrow">&#8594;</div>'
+    kafka_sub = f"topic: {kafka_topic}" if kafka_available else "broker unreachable"
+    bronze_sub = f"{bronze_count:,} rows" if bronze_count is not None else "—"
+
+    stages = [
+        stage("&#127760;", "Extract", "FakeStore API"),
+        stage("&#9989;", "Validate", "Required fields"),
+        stage("&#128231;", "Kafka", kafka_sub),
+        stage("&#128295;", "Transform", "Bucket &amp; normalize"),
+        stage("&#129352;&#129351;", "Bronze &rarr; Silver", bronze_sub),
+        stage("&#11088;", "Warehouse", f"{gold_rows} categories"),
+        stage("&#128202;", "Dashboard", f"{total_products:,} products &middot; you are here"),
+    ]
+
+    if failed_count == 0:
+        status_html = f'<span class="status-dot" style="color:{STATUS_GOOD}">&#9679;</span> All writes landed — nothing pending'
+    else:
+        status_html = (
+            f'<span class="status-dot" style="color:{STATUS_WARNING}">&#9679;</span> '
+            f'{failed_count} record(s) failed to load and are queued for replay — retry from the sidebar'
+        )
+
+    st.markdown(
+        f'''<div class="pipeline-flow">{arrow.join(stages)}</div>
+        <div class="pipeline-branch-row">&#8618; On a failed Databricks write: saved to <code>failed_records/</code> &nbsp;{status_html}</div>''',
+        unsafe_allow_html=True,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -526,6 +633,19 @@ except Exception:  # noqa: BLE001
     bronze_count = None
 
 failed_count = failed_records_count()
+
+# ---------------- Pipeline flow diagram ----------------
+st.subheader("Pipeline Workflow")
+render_pipeline_flow(
+    bronze_count=bronze_count,
+    total_products=len(products_df),
+    gold_rows=len(gold_df),
+    failed_count=failed_count,
+    kafka_topic=config.KAFKA_TOPIC,
+    kafka_available=KAFKA_AVAILABLE,
+)
+
+st.divider()
 
 # ---------------- KPI row ----------------
 k1, k2, k3, k4, k5 = st.columns(5)
