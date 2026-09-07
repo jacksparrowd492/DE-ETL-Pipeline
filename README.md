@@ -1,0 +1,47 @@
+# FakeStore ETL Pipeline
+
+An ETL pipeline that extracts product data from the [FakeStore API](https://fakestoreapi.com/),
+validates it, transforms it into the bronze/silver row shape used by
+`fakestore_catalog.etl_project`, streams it through Kafka, and loads it into
+Databricks (with a local replay path for records that fail to load).
+
+```
+extract/  -> validation/  -> kafka1/ (producer/consumer)  -> load/ (Databricks) -> staging/ (warehouse promotion)
+                                                                       \-> failed_records/ -> replay/
+```
+
+Orchestrated as an Airflow DAG in [fakestore_pipeline.py](fakestore_pipeline.py).
+
+## Setup
+
+```bash
+pip install -r requirements.txt
+cp .env.example .env   # fill in your Databricks + Kafka values
+```
+
+## Running tests
+
+```bash
+pip install -r requirements-dev.txt
+pytest                                   # run the unit test suite
+pytest --cov=transform --cov=validation --cov=extract --cov=kafka1 --cov=load --cov-report=term-missing
+```
+
+Tests live in [tests/](tests/):
+
+- `test_transformer.py`, `test_validator.py` — pure unit tests of the
+  transformation/validation logic (no I/O, no mocks needed).
+- `test_extractor.py`, `test_producer.py`, `test_databricks_loader.py` —
+  mock tests: HTTP calls, the Kafka producer, and the Databricks connection
+  are all patched, so the suite never hits a real API, broker, or warehouse.
+
+## Continuous Integration
+
+[.github/workflows/ci.yml](.github/workflows/ci.yml) runs the full test
+suite on every push/PR to `main` and `develop` (Python 3.10 and 3.12). A PR
+cannot merge while CI is failing.
+
+## Git workflow
+
+See [docs/GIT_WORKFLOW.md](docs/GIT_WORKFLOW.md) for the branching strategy
+used on this project.
