@@ -57,6 +57,83 @@ This calls the live FakeStore API, validates and transforms every product,
 and writes the result to `data/output.csv` (gitignored — it's a generated
 run artifact, not source, same as `logs/` and `failed_records/`).
 
+## Running the full stack locally (Kafka + Airflow + Databricks + Streamlit)
+
+This needs Kafka running, and either Airflow or a stand-in for it, before
+the Databricks-backed pieces (consumer, Streamlit) have anything to read.
+Notes below are from actually getting this working on Windows + WSL2 —
+keep them in mind if you're setting this up on a similar machine.
+
+**Airflow cannot run on native Windows** — its CLI imports
+`os.register_at_fork`, which doesn't exist there, so it crashes immediately
+on import. The supported path is WSL2. If your WSL2 has internet access,
+set up a venv there, `pip install apache-airflow` (with the [constraints
+file](https://airflow.apache.org/docs/apache-airflow/stable/installation/installing-from-pypi.html)
+for your Airflow + Python version) and the project's `requirements.txt`,
+point `AIRFLOW__CORE__DAGS_FOLDER` at this project directory (reachable
+from WSL2 at `/mnt/f/...`), and run `airflow standalone`. If WSL2 has no
+internet (common on locked-down/corporate networks — the standard
+mirrored-networking fix in `.wslconfig` may not help if a network policy
+blocks it outright), use [run_pipeline_no_airflow.py](run_pipeline_no_airflow.py)
+instead — it calls the exact same functions the DAG calls
+(`extract_products`, `validate_products`, `send_products`,
+`replay_failed_records`), in the same order, just without Airflow's
+scheduler/XCom.
+
+1. **Kafka** (in WSL2, e.g. `wsl -d Ubuntu`) — this project was tested
+   against a Kafka install in KRaft mode (no Zookeeper needed):
+
+   ```bash
+   cd /mnt/f/Kafka/kafka_2.13-3.9.2   # or wherever your Kafka install is
+   bin/kafka-server-start.sh config/kraft/server.properties
+   # first time only, if storage isn't formatted yet:
+   #   bin/kafka-storage.sh format -t <uuid> -c config/kraft/server.properties
+   bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --topic validated_products --if-not-exists
+   ```
+
+   **WSL2 loopback quirk:** on some machines WSL2 only forwards its
+   **IPv6** loopback (`::1`) to Windows, not IPv4 (`127.0.0.1`) — `localhost`
+   resolves to both, and kafka-python can hang for 30s per attempt if it
+   picks the one that isn't forwarded. If native Windows can't reach Kafka
+   at `localhost:9092`, test both explicitly (`127.0.0.1:9092` vs
+   `[::1]:9092`) and, if only IPv6 works, set both
+   `advertised.listeners=PLAINTEXT://[::1]:9092` in
+   `config/kraft/server.properties` and `KAFKA_BOOTSTRAP_SERVER=[::1]:9092`
+   in `.env` (bootstrapping can otherwise succeed via one address while the
+   post-bootstrap produce connection fails via the advertised one).
+
+2. **Airflow DAG, or the fallback** (native Windows, once Kafka is up):
+
+   ```bash
+   python run_pipeline_no_airflow.py
+   ```
+
+   Runs extract -> validate -> send_to_kafka -> replay_failed against the
+   real broker.
+
+3. **Kafka consumer** (native Windows) — transforms each message and loads
+   it into Databricks (bronze/silver, then dim_category/fact_products/
+   gold_product_summary):
+
+   ```bash
+   python -m kafka1.consumer
+   ```
+
+   Run as a module (`-m`), not `python kafka1/consumer.py` — the latter
+   doesn't add the project root to `sys.path`, so the sibling `transform`/
+   `load`/`staging` package imports fail. This is a long-running consumer
+   (`Ctrl+C` to stop once it's caught up); if Databricks returns
+   `BAD_REQUEST: Cannot create the resource, please try again later`, your
+   SQL warehouse is stopped — start it in the Databricks workspace UI and
+   retry.
+
+4. **Streamlit dashboard** (native Windows), reads live from the same
+   Databricks tables:
+
+   ```bash
+   streamlit run streamlit_app.py
+   ```
+
 ## Continuous Integration
 
 [.github/workflows/ci.yml](.github/workflows/ci.yml) runs the full test
