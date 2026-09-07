@@ -29,5 +29,6 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
 
-      - name: Run unit tests
-        run: pytest --cov=transform --cov=validation --cov=extract --cov=kafka1 --cov=load --cov-report=term-missing
+      - name: Run Tests
+        run: |
+          pytest -q --cov=transform --cov=validation --cov=extract --cov=kafka1 --cov=load --cov-report=term-missing
