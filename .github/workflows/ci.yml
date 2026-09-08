@@ -111,7 +111,24 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run extract -> validate -> transform against the live FakeStore API
+      - name: Start mock FakeStore API
+        # fakestoreapi.com sits behind Cloudflare and increasingly returns 403
+        # Forbidden to requests from shared/cloud IP ranges, GitHub Actions
+        # runners included — even though the same call succeeds from a normal
+        # connection. Serve the same JSON shape locally so this job tests our
+        # extract -> validate -> transform code, not fakestoreapi.com's uptime
+        # or IP allow-listing.
+        run: |
+          python scripts/mock_fakestore_server.py 8000 &
+          for i in $(seq 1 20); do
+            curl -sf http://127.0.0.1:8000/products -o /dev/null && break
+            sleep 0.5
+          done
+          curl -sf http://127.0.0.1:8000/products -o /dev/null || (echo "Mock FakeStore API failed to start" && exit 1)
+
+      - name: Run extract -> validate -> transform against the mock FakeStore API
+        env:
+          FAKESTORE_API_URL: http://127.0.0.1:8000/products
         run: python run_local.py
 
       - name: Verify output was produced
