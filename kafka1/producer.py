@@ -37,10 +37,7 @@ TOPIC = os.getenv("KAFKA_TOPIC")
 # Configure Logger
 # --------------------------------------------------
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 
 logger = logging.getLogger("KafkaProducer")
 
@@ -63,26 +60,23 @@ def get_producer() -> KafkaProducer:
             bootstrap_servers=BOOTSTRAP_SERVER,
             value_serializer=lambda value: json.dumps(value).encode("utf-8"),
             retries=5,
-            acks="all"
+            acks="all",
         )
 
     return _producer
 
+
 # --------------------------------------------------
 # Validate Product
 # --------------------------------------------------
+
 
 def validate_product(product: dict) -> bool:
     """
     Performs basic validation before sending to Kafka.
     """
 
-    required_fields = [
-        "id",
-        "title",
-        "price",
-        "category"
-    ]
+    required_fields = ["id", "title", "price", "category"]
 
     for field in required_fields:
         if field not in product:
@@ -95,6 +89,7 @@ def validate_product(product: dict) -> bool:
 # --------------------------------------------------
 # Add Metadata
 # --------------------------------------------------
+
 
 def enrich_product(product: dict) -> dict:
     """
@@ -114,6 +109,7 @@ def enrich_product(product: dict) -> dict:
 # Send One Product
 # --------------------------------------------------
 
+
 def send_product(product: dict) -> bool:
 
     if not validate_product(product):
@@ -122,11 +118,7 @@ def send_product(product: dict) -> bool:
     product = enrich_product(product)
 
     try:
-
-        future = get_producer().send(
-            TOPIC,
-            value=product
-        )
+        future = get_producer().send(TOPIC, value=product)
 
         metadata = future.get(timeout=10)
 
@@ -134,19 +126,17 @@ def send_product(product: dict) -> bool:
             "Sent Product ID=%s | Partition=%s | Offset=%s",
             product["id"],
             metadata.partition,
-            metadata.offset
+            metadata.offset,
         )
 
         return True
 
     except KafkaError as e:
-
         logger.error("Kafka Error: %s", e)
 
         return False
 
     except Exception:
-
         logger.exception("Unexpected Error while sending message")
 
         return False
@@ -156,6 +146,7 @@ def send_product(product: dict) -> bool:
 # Send Multiple Products
 # --------------------------------------------------
 
+
 def send_products(products):
 
     success = 0
@@ -163,7 +154,6 @@ def send_products(products):
     failed = 0
 
     for product in products:
-
         if send_product(product):
             success += 1
         else:
@@ -171,16 +161,13 @@ def send_products(products):
 
     get_producer().flush()
 
-    logger.info(
-        "Batch Completed | Success=%s | Failed=%s",
-        success,
-        failed
-    )
+    logger.info("Batch Completed | Success=%s | Failed=%s", success, failed)
 
 
 # --------------------------------------------------
 # Close Producer
 # --------------------------------------------------
+
 
 def close_producer():
 
@@ -196,13 +183,7 @@ def close_producer():
 # --------------------------------------------------
 
 if __name__ == "__main__":
-
-    sample = {
-        "id": 1,
-        "title": "Laptop",
-        "price": 599.99,
-        "category": "electronics"
-    }
+    sample = {"id": 1, "title": "Laptop", "price": 599.99, "category": "electronics"}
 
     send_product(sample)
 

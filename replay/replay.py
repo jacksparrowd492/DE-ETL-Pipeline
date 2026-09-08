@@ -13,10 +13,7 @@ import os
 
 from kafka1.producer import send_product
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +41,6 @@ def replay_failed_records():
     remaining = []
 
     for product in products:
-
         success = send_product(product)
 
         if not success:
@@ -53,10 +49,7 @@ def replay_failed_records():
     with open(FAILED_FILE, "w") as file:
         json.dump(remaining, file, indent=4)
 
-    logger.info(
-        "Replay Complete | Remaining Failed Records: %s",
-        len(remaining)
-    )
+    logger.info("Replay Complete | Remaining Failed Records: %s", len(remaining))
 
 
 if __name__ == "__main__":

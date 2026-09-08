@@ -16,12 +16,16 @@ more thorough set of tests.
 
 import unittest
 
-from transform.transformer import classify_price, classify_rating, normalize_category, transform_product
+from transform.transformer import (
+    classify_price,
+    classify_rating,
+    normalize_category,
+    transform_product,
+)
 from validation.validator import is_valid_product, validate_products
 
 
 class TransformerTestCase(unittest.TestCase):
-
     def test_normalize_category_maps_jewelery_typo_to_jewelry(self):
         self.assertEqual(normalize_category("jewelery"), "Jewelry")
 
@@ -52,7 +56,6 @@ class TransformerTestCase(unittest.TestCase):
 
 
 class ValidatorTestCase(unittest.TestCase):
-
     def test_is_valid_product_rejects_missing_field(self):
         product = {"id": 1, "title": "Item", "price": 9.99}  # no category
         self.assertFalse(is_valid_product(product))

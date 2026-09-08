@@ -18,10 +18,7 @@ from config import table
 # Configure Logger
 # --------------------------------------------------------
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +31,7 @@ SILVER_TABLE = table("silver_products")
 # --------------------------------------------------------
 # Create Warehouse Tables
 # --------------------------------------------------------
+
 
 def create_products_table():
     """
@@ -100,6 +98,7 @@ def create_products_table():
 # dim_category — get existing id or create a new one
 # --------------------------------------------------------
 
+
 def get_or_create_category_id(cursor, conn, product_category: str) -> int:
     cursor.execute(
         f"SELECT category_id FROM {DIM_CATEGORY_TABLE} WHERE product_category = ?",
@@ -127,8 +126,14 @@ def get_or_create_category_id(cursor, conn, product_category: str) -> int:
 # --------------------------------------------------------
 
 FACT_COLUMNS = (
-    "product_id", "category_id", "price", "rating_rate", "rating_count",
-    "price_category", "product_value_segment", "rating_category",
+    "product_id",
+    "category_id",
+    "price",
+    "rating_rate",
+    "rating_count",
+    "price_category",
+    "product_value_segment",
+    "rating_category",
 )
 
 
@@ -171,9 +176,14 @@ def upsert_fact_product(product: dict, category_id: int):
                 )
             """,
             (
-                product["product_id"], category_id, product["price"],
-                product["rating_rate"], product["rating_count"], product["price_category"],
-                product["product_value_segment"], product["rating_category"],
+                product["product_id"],
+                category_id,
+                product["price"],
+                product["rating_rate"],
+                product["rating_count"],
+                product["price_category"],
+                product["product_value_segment"],
+                product["rating_category"],
             ),
         )
 
@@ -182,7 +192,9 @@ def upsert_fact_product(product: dict, category_id: int):
         logger.info("Upserted Product %s into fact_products.", product["product_id"])
 
     except Exception as e:
-        logger.exception("fact_products upsert failed for Product %s: %s", product.get("product_id"), e)
+        logger.exception(
+            "fact_products upsert failed for Product %s: %s", product.get("product_id"), e
+        )
         raise
 
     finally:
@@ -195,6 +207,7 @@ def upsert_fact_product(product: dict, category_id: int):
 # --------------------------------------------------------
 # gold_product_summary — refresh one category's aggregate row
 # --------------------------------------------------------
+
 
 def refresh_gold_summary(product_category: str):
     """
@@ -266,6 +279,7 @@ def refresh_gold_summary(product_category: str):
 # Promote one product: silver -> dim_category -> fact -> gold
 # --------------------------------------------------------
 
+
 def promote_to_warehouse(product: dict):
     """
     Given an already-transformed product (see transform.transformer), upserts
@@ -292,6 +306,7 @@ def promote_to_warehouse(product: dict):
 # --------------------------------------------------------
 # Backwards-compatible alias (old flat-table pipeline name)
 # --------------------------------------------------------
+
 
 def merge_staging_to_products():
     """

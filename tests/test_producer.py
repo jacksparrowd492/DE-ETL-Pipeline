@@ -14,6 +14,7 @@ from kafka1.producer import enrich_product, send_product, send_products, validat
 # validate_product
 # --------------------------------------------------------
 
+
 def test_validate_product_accepts_well_formed_product(raw_product):
     assert validate_product(raw_product) is True
 
@@ -26,6 +27,7 @@ def test_validate_product_rejects_missing_field(raw_product):
 # --------------------------------------------------------
 # enrich_product
 # --------------------------------------------------------
+
 
 def test_enrich_product_adds_batch_id_and_ingestion_time(raw_product):
     enriched = enrich_product(raw_product)
@@ -45,6 +47,7 @@ def test_enrich_product_does_not_mutate_original(raw_product):
 # --------------------------------------------------------
 # send_product (mocks the Kafka producer)
 # --------------------------------------------------------
+
 
 def test_send_product_happy_path_returns_true(mocker, raw_product):
     fake_future = mocker.Mock()
@@ -80,6 +83,7 @@ def test_send_product_returns_false_on_kafka_error(mocker, raw_product):
 # --------------------------------------------------------
 # send_products (batch)
 # --------------------------------------------------------
+
 
 def test_send_products_counts_success_and_failure(mocker, raw_product):
     # kafka1.producer.validate_product only checks key *presence* (unlike

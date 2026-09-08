@@ -25,10 +25,7 @@ from extract.extractor import extract_products
 from validation.validator import validate_products
 from transform.transformer import transform_product
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 
 logger = logging.getLogger(__name__)
 
@@ -36,9 +33,19 @@ OUTPUT_DIR = "data"
 OUTPUT_FILE = os.path.join(OUTPUT_DIR, "output.csv")
 
 CSV_COLUMNS = (
-    "product_id", "product_name", "product_category", "price", "price_category",
-    "rating_rate", "rating_count", "product_description", "image_url",
-    "data_source", "etl_load_timestamp", "rating_category", "product_value_segment",
+    "product_id",
+    "product_name",
+    "product_category",
+    "price",
+    "price_category",
+    "rating_rate",
+    "rating_count",
+    "product_description",
+    "image_url",
+    "data_source",
+    "etl_load_timestamp",
+    "rating_category",
+    "product_value_segment",
 )
 
 
@@ -48,7 +55,9 @@ def run():
     logger.info("Extracted %s raw products.", len(raw_products))
 
     validated = validate_products(raw_products)
-    logger.info("Validated %s products (%s dropped).", len(validated), len(raw_products) - len(validated))
+    logger.info(
+        "Validated %s products (%s dropped).", len(validated), len(raw_products) - len(validated)
+    )
 
     transformed = [transform_product(p, data_source="Local Run") for p in validated]
 

@@ -27,10 +27,7 @@ from validation.validator import validate_products
 from kafka1.producer import send_products
 from replay.replay import replay_failed_records
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 
 logger = logging.getLogger(__name__)
 

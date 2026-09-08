@@ -26,10 +26,7 @@ from config import table
 # Configure Logger
 # --------------------------------------------------------
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 
 logger = logging.getLogger(__name__)
 
@@ -44,15 +41,35 @@ BRONZE_TABLE = table("bronze_products")
 SILVER_TABLE = table("silver_products")
 
 BRONZE_COLUMNS = (
-    "product_id", "product_name", "product_category", "price", "price_category",
-    "rating_rate", "rating_count", "product_description", "image_url",
-    "data_source", "etl_load_timestamp", "rating_category", "product_value_segment",
+    "product_id",
+    "product_name",
+    "product_category",
+    "price",
+    "price_category",
+    "rating_rate",
+    "rating_count",
+    "product_description",
+    "image_url",
+    "data_source",
+    "etl_load_timestamp",
+    "rating_category",
+    "product_value_segment",
 )
 
 SILVER_COLUMNS = (
-    "product_id", "product_name", "product_category", "price", "price_category",
-    "rating_rate", "rating_count", "product_description", "image_url",
-    "data_source", "etl_load_timestamp", "product_value_segment", "rating_category",
+    "product_id",
+    "product_name",
+    "product_category",
+    "price",
+    "price_category",
+    "rating_rate",
+    "rating_count",
+    "product_description",
+    "image_url",
+    "data_source",
+    "etl_load_timestamp",
+    "product_value_segment",
+    "rating_category",
     "silver_load_timestamp",
 )
 
@@ -60,6 +77,7 @@ SILVER_COLUMNS = (
 # --------------------------------------------------------
 # Create Bronze / Silver Tables
 # --------------------------------------------------------
+
 
 def create_staging_table():
     """
@@ -131,6 +149,7 @@ def create_staging_table():
 # Save Failed Record
 # --------------------------------------------------------
 
+
 def save_failed_record(product):
     """
     Saves failed products locally for replay.
@@ -141,9 +160,7 @@ def save_failed_record(product):
     failed_products = []
 
     if os.path.exists(FAILED_FILE):
-
         try:
-
             with open(FAILED_FILE, "r") as file:
                 failed_products = json.load(file)
 
@@ -155,15 +172,13 @@ def save_failed_record(product):
     with open(FAILED_FILE, "w") as file:
         json.dump(failed_products, file, indent=4, default=str)
 
-    logger.warning(
-        "Product %s saved for replay.",
-        product["product_id"]
-    )
+    logger.warning("Product %s saved for replay.", product["product_id"])
 
 
 # --------------------------------------------------------
 # Load Product into Bronze + Silver
 # --------------------------------------------------------
+
 
 def load_to_staging(product):
     """
@@ -177,7 +192,6 @@ def load_to_staging(product):
     cursor = None
 
     try:
-
         conn = get_connection()
         cursor = conn.cursor()
 
@@ -204,24 +218,16 @@ def load_to_staging(product):
 
         conn.commit()
 
-        logger.info(
-            "Inserted Product %s into bronze + silver.",
-            product["product_id"]
-        )
+        logger.info("Inserted Product %s into bronze + silver.", product["product_id"])
 
-    except Exception as e:
-
-        logger.exception(
-            "Failed loading Product %s",
-            product["product_id"]
-        )
+    except Exception:
+        logger.exception("Failed loading Product %s", product["product_id"])
 
         save_failed_record(product)
 
         raise
 
     finally:
-
         if cursor:
             cursor.close()
 

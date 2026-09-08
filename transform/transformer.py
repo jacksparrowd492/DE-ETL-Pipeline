@@ -44,6 +44,7 @@ def normalize_category(raw_category: str) -> str:
 # Bucketing rules (inferred from existing bronze_products data)
 # --------------------------------------------------------
 
+
 def classify_price(price: float) -> str:
     if price < 50:
         return "Budget"
@@ -73,6 +74,7 @@ def classify_rating(rating_rate: float) -> str:
 # --------------------------------------------------------
 # Transform a Product
 # --------------------------------------------------------
+
 
 def transform_product(product: dict, data_source: str = "Fake Store API") -> dict:
     """

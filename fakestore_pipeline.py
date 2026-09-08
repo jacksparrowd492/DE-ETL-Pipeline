@@ -4,7 +4,6 @@ fakestore_pipeline.py
 
 from datetime import datetime
 import sys
-import os
 
 # Add project root to path
 sys.path.append("/mnt/f/Files/DE LAB/Exercise5_ETL")
@@ -21,6 +20,7 @@ from replay.replay import replay_failed_records
 # -----------------------------
 # TASK FUNCTIONS
 # -----------------------------
+
 
 def extract_task(**context):
     products = extract_products()
@@ -57,10 +57,9 @@ with DAG(
     dag_id="fakestore_pipeline",
     default_args=default_args,
     start_date=datetime(2024, 1, 1),
-    schedule="@daily",   # ✅ FIXED HERE
+    schedule="@daily",  # ✅ FIXED HERE
     catchup=False,
 ) as dag:
-
     extract = PythonOperator(
         task_id="extract",
         python_callable=extract_task,

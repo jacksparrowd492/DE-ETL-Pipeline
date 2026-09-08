@@ -58,6 +58,7 @@ logger = logging.getLogger("streamlit_app")
 # producer module opens a live connection at import time).
 try:
     from kafka1.producer import send_product as kafka_send_product
+
     KAFKA_AVAILABLE = True
 except Exception as e:  # noqa: BLE001 - deliberately broad, this is optional infra
     KAFKA_AVAILABLE = False
@@ -356,18 +357,20 @@ STATUS_GOOD = "#0ca30c"
 STATUS_WARNING = "#fab219"
 
 
-def render_pipeline_flow(bronze_count, total_products, gold_rows, failed_count, kafka_topic, kafka_available):
+def render_pipeline_flow(
+    bronze_count, total_products, gold_rows, failed_count, kafka_topic, kafka_available
+):
     """Renders the extract -> validate -> Kafka -> transform -> load ->
     warehouse -> dashboard architecture as a connected flow diagram,
     annotated with a few live counts already loaded elsewhere on the page.
     Purely presentational — no data access of its own."""
 
     def stage(icon, title, sub):
-        return f'''<div class="stage">
+        return f"""<div class="stage">
             <div class="stage-icon">{icon}</div>
             <div class="stage-title">{title}</div>
             <div class="stage-sub">{sub}</div>
-        </div>'''
+        </div>"""
 
     arrow = '<div class="stage-arrow">&#8594;</div>'
     kafka_sub = f"topic: {kafka_topic}" if kafka_available else "broker unreachable"
@@ -388,12 +391,12 @@ def render_pipeline_flow(bronze_count, total_products, gold_rows, failed_count, 
     else:
         status_html = (
             f'<span class="status-dot" style="color:{STATUS_WARNING}">&#9679;</span> '
-            f'{failed_count} record(s) failed to load and are queued for replay — retry from the sidebar'
+            f"{failed_count} record(s) failed to load and are queued for replay — retry from the sidebar"
         )
 
     st.markdown(
-        f'''<div class="pipeline-flow">{arrow.join(stages)}</div>
-        <div class="pipeline-branch-row">&#8618; On a failed Databricks write: saved to <code>failed_records/</code> &nbsp;{status_html}</div>''',
+        f"""<div class="pipeline-flow">{arrow.join(stages)}</div>
+        <div class="pipeline-branch-row">&#8618; On a failed Databricks write: saved to <code>failed_records/</code> &nbsp;{status_html}</div>""",
         unsafe_allow_html=True,
     )
 
@@ -402,9 +405,10 @@ def render_pipeline_flow(bronze_count, total_products, gold_rows, failed_count, 
 # One-time setup — make sure Databricks tables exist
 # ---------------------------------------------------------------------------
 
+
 @st.cache_resource(show_spinner=False)
 def init_tables():
-    create_staging_table()   # bronze + silver
+    create_staging_table()  # bronze + silver
     create_products_table()  # dim_category + fact_products + gold_product_summary
     return True
 
@@ -412,6 +416,7 @@ def init_tables():
 # ---------------------------------------------------------------------------
 # Data access (cached, short TTL so the dashboard stays live)
 # ---------------------------------------------------------------------------
+
 
 @st.cache_data(ttl=30, show_spinner="Loading products from Databricks...")
 def load_silver() -> pd.DataFrame:
@@ -476,6 +481,7 @@ def clear_dashboard_cache():
 # Write path — Add Product -> validate -> transform -> Databricks
 # ---------------------------------------------------------------------------
 
+
 def add_product(raw_product: dict, publish_to_kafka: bool = False):
     """
     Runs one product through validate -> transform -> bronze/silver -> dim/
@@ -483,12 +489,15 @@ def add_product(raw_product: dict, publish_to_kafka: bool = False):
     shows up in the dashboard immediately.
     """
     if not is_valid_product(raw_product):
-        return False, "Validation failed — title, price and category are required and price must be numeric."
+        return (
+            False,
+            "Validation failed — title, price and category are required and price must be numeric.",
+        )
 
     transformed = transform_product(raw_product, data_source="Streamlit Manual Entry")
 
     try:
-        load_to_staging(transformed)       # bronze + silver (also saves to failed_records/ on failure)
+        load_to_staging(transformed)  # bronze + silver (also saves to failed_records/ on failure)
         promote_to_warehouse(transformed)  # dim_category + fact_products + gold_product_summary
     except Exception as e:  # noqa: BLE001
         return False, f"Databricks write failed — saved locally for replay. ({e})"
@@ -650,9 +659,15 @@ st.divider()
 # ---------------- KPI row ----------------
 k1, k2, k3, k4, k5 = st.columns(5)
 k1.metric("Total Products", len(products_df))
-k2.metric("Inventory Value", f"${products_df['price'].sum():,.2f}" if not products_df.empty else "$0.00")
-k3.metric("Avg. Price", f"${products_df['price'].mean():,.2f}" if not products_df.empty else "$0.00")
-k4.metric("Avg. Rating", f"{products_df['rating_rate'].mean():.2f} ★" if not products_df.empty else "—")
+k2.metric(
+    "Inventory Value", f"${products_df['price'].sum():,.2f}" if not products_df.empty else "$0.00"
+)
+k3.metric(
+    "Avg. Price", f"${products_df['price'].mean():,.2f}" if not products_df.empty else "$0.00"
+)
+k4.metric(
+    "Avg. Rating", f"{products_df['rating_rate'].mean():.2f} ★" if not products_df.empty else "—"
+)
 k5.metric("Pending Replay", failed_count)
 
 if products_df.empty:
@@ -676,13 +691,21 @@ with tab_overview:
         counts = products_df["product_category"].value_counts().reset_index()
         counts.columns = ["product_category", "count"]
         fig = px.bar(
-            counts, x="count", y="product_category", orientation="h",
-            color="product_category", color_discrete_map=color_map, text="count",
+            counts,
+            x="count",
+            y="product_category",
+            orientation="h",
+            color="product_category",
+            color_discrete_map=color_map,
+            text="count",
         )
         fig.update_traces(textposition="outside", marker_line_width=0)
         fig.update_layout(
-            showlegend=False, yaxis_title="Product Category", xaxis_title="Number of Products",
-            plot_bgcolor=CHART_SURFACE, paper_bgcolor=CHART_SURFACE,
+            showlegend=False,
+            yaxis_title="Product Category",
+            xaxis_title="Number of Products",
+            plot_bgcolor=CHART_SURFACE,
+            paper_bgcolor=CHART_SURFACE,
             yaxis=dict(categoryorder="total ascending"),
             margin=dict(t=10),
         )
@@ -692,15 +715,19 @@ with tab_overview:
     with c2:
         st.subheader("Category Share")
         fig = px.pie(
-            products_df, names="product_category", color="product_category",
-            color_discrete_map=color_map, hole=0.55,
+            products_df,
+            names="product_category",
+            color="product_category",
+            color_discrete_map=color_map,
+            hole=0.55,
         )
         fig.update_traces(
             textinfo="percent+label",
             hovertemplate="Category: %{label}<br>Products: %{value} (%{percent})<extra></extra>",
         )
         fig.update_layout(
-            paper_bgcolor=CHART_SURFACE, margin=dict(t=10),
+            paper_bgcolor=CHART_SURFACE,
+            margin=dict(t=10),
             legend_title_text="Product Category",
         )
         apply_dark_axes(fig)
@@ -712,13 +739,20 @@ with tab_overview:
         by_day = (
             products_df.dropna(subset=[ts_col])
             .assign(day=lambda d: d[ts_col].dt.date)
-            .groupby("day").size().reset_index(name="count")
+            .groupby("day")
+            .size()
+            .reset_index(name="count")
         )
-        fig = px.line(by_day, x="day", y="count", markers=True, color_discrete_sequence=[SEQUENTIAL_BLUE])
+        fig = px.line(
+            by_day, x="day", y="count", markers=True, color_discrete_sequence=[SEQUENTIAL_BLUE]
+        )
         fig.update_traces(line_width=2, marker_size=8)
         fig.update_layout(
-            plot_bgcolor=CHART_SURFACE, paper_bgcolor=CHART_SURFACE,
-            xaxis_title="Date", yaxis_title="Products Ingested", margin=dict(t=10),
+            plot_bgcolor=CHART_SURFACE,
+            paper_bgcolor=CHART_SURFACE,
+            xaxis_title="Date",
+            yaxis_title="Products Ingested",
+            margin=dict(t=10),
         )
         apply_dark_axes(fig)
         st.plotly_chart(fig, use_container_width=True)
@@ -731,10 +765,16 @@ with tab_price_rating:
 
     with c3:
         st.subheader("Price Distribution")
-        fig = px.histogram(products_df, x="price", nbins=20, color_discrete_sequence=[SEQUENTIAL_BLUE])
+        fig = px.histogram(
+            products_df, x="price", nbins=20, color_discrete_sequence=[SEQUENTIAL_BLUE]
+        )
         fig.update_layout(
-            bargap=0.05, plot_bgcolor=CHART_SURFACE, paper_bgcolor=CHART_SURFACE,
-            xaxis_title="Price ($)", yaxis_title="Number of Products", margin=dict(t=10),
+            bargap=0.05,
+            plot_bgcolor=CHART_SURFACE,
+            paper_bgcolor=CHART_SURFACE,
+            xaxis_title="Price ($)",
+            yaxis_title="Number of Products",
+            margin=dict(t=10),
         )
         apply_dark_axes(fig)
         st.plotly_chart(fig, use_container_width=True)
@@ -743,13 +783,21 @@ with tab_price_rating:
         st.subheader("Average Price by Category")
         avg_price = products_df.groupby("product_category")["price"].mean().reset_index()
         fig = px.bar(
-            avg_price, x="product_category", y="price", color="product_category",
-            color_discrete_map=color_map, text_auto=".2f",
+            avg_price,
+            x="product_category",
+            y="price",
+            color="product_category",
+            color_discrete_map=color_map,
+            text_auto=".2f",
         )
         fig.update_traces(marker_line_width=0)
         fig.update_layout(
-            showlegend=False, plot_bgcolor=CHART_SURFACE, paper_bgcolor=CHART_SURFACE,
-            xaxis_title="Product Category", yaxis_title="Avg. Price ($)", margin=dict(t=10),
+            showlegend=False,
+            plot_bgcolor=CHART_SURFACE,
+            paper_bgcolor=CHART_SURFACE,
+            xaxis_title="Product Category",
+            yaxis_title="Avg. Price ($)",
+            margin=dict(t=10),
         )
         apply_dark_axes(fig)
         st.plotly_chart(fig, use_container_width=True)
@@ -759,19 +807,30 @@ with tab_price_rating:
     with c5:
         st.subheader("Price Tier Breakdown")
         tier_counts = (
-            products_df["price_category"].value_counts()
-            .reindex(PRICE_TIER_ORDER).fillna(0).reset_index()
+            products_df["price_category"]
+            .value_counts()
+            .reindex(PRICE_TIER_ORDER)
+            .fillna(0)
+            .reset_index()
         )
         tier_counts.columns = ["price_category", "count"]
         fig = px.bar(
-            tier_counts, x="price_category", y="count", color="price_category",
-            color_discrete_map=PRICE_TIER_COLORS, category_orders={"price_category": PRICE_TIER_ORDER},
+            tier_counts,
+            x="price_category",
+            y="count",
+            color="price_category",
+            color_discrete_map=PRICE_TIER_COLORS,
+            category_orders={"price_category": PRICE_TIER_ORDER},
             text="count",
         )
         fig.update_traces(textposition="outside", marker_line_width=0)
         fig.update_layout(
-            showlegend=False, plot_bgcolor=CHART_SURFACE, paper_bgcolor=CHART_SURFACE,
-            xaxis_title="Price Tier", yaxis_title="Number of Products", margin=dict(t=10),
+            showlegend=False,
+            plot_bgcolor=CHART_SURFACE,
+            paper_bgcolor=CHART_SURFACE,
+            xaxis_title="Price Tier",
+            yaxis_title="Number of Products",
+            margin=dict(t=10),
         )
         apply_dark_axes(fig)
         st.plotly_chart(fig, use_container_width=True)
@@ -779,33 +838,51 @@ with tab_price_rating:
     with c6:
         st.subheader("Rating Tier Breakdown")
         rating_counts = (
-            products_df["rating_category"].value_counts()
-            .reindex(RATING_TIER_ORDER).fillna(0).reset_index()
+            products_df["rating_category"]
+            .value_counts()
+            .reindex(RATING_TIER_ORDER)
+            .fillna(0)
+            .reset_index()
         )
         rating_counts.columns = ["rating_category", "count"]
         fig = px.bar(
-            rating_counts, x="rating_category", y="count", color="rating_category",
-            color_discrete_map=RATING_TIER_COLORS, category_orders={"rating_category": RATING_TIER_ORDER},
+            rating_counts,
+            x="rating_category",
+            y="count",
+            color="rating_category",
+            color_discrete_map=RATING_TIER_COLORS,
+            category_orders={"rating_category": RATING_TIER_ORDER},
             text="count",
         )
         fig.update_traces(textposition="outside", marker_line_width=0)
         fig.update_layout(
-            showlegend=False, plot_bgcolor=CHART_SURFACE, paper_bgcolor=CHART_SURFACE,
-            xaxis_title="Rating Tier", yaxis_title="Number of Products", margin=dict(t=10),
+            showlegend=False,
+            plot_bgcolor=CHART_SURFACE,
+            paper_bgcolor=CHART_SURFACE,
+            xaxis_title="Rating Tier",
+            yaxis_title="Number of Products",
+            margin=dict(t=10),
         )
         apply_dark_axes(fig)
         st.plotly_chart(fig, use_container_width=True)
 
     st.subheader("Price vs. Rating")
     fig = px.scatter(
-        products_df, x="price", y="rating_rate", color="rating_category",
-        color_discrete_map=RATING_TIER_COLORS, category_orders={"rating_category": RATING_TIER_ORDER},
+        products_df,
+        x="price",
+        y="rating_rate",
+        color="rating_category",
+        color_discrete_map=RATING_TIER_COLORS,
+        category_orders={"rating_category": RATING_TIER_ORDER},
         hover_data=["product_name", "product_category"],
     )
     fig.update_traces(marker=dict(size=9, line=dict(width=1, color=CHART_SURFACE)))
     fig.update_layout(
-        plot_bgcolor=CHART_SURFACE, paper_bgcolor=CHART_SURFACE,
-        xaxis_title="Price ($)", yaxis_title="Rating (out of 5)", margin=dict(t=10),
+        plot_bgcolor=CHART_SURFACE,
+        paper_bgcolor=CHART_SURFACE,
+        xaxis_title="Price ($)",
+        yaxis_title="Rating (out of 5)",
+        margin=dict(t=10),
         legend_title_text="Rating Tier",
     )
     apply_dark_axes(fig)
@@ -821,13 +898,21 @@ with tab_gold:
         with g1:
             st.subheader("Total Products by Category (Gold)")
             fig = px.bar(
-                gold_df, x="product_category", y="total_products", color="product_category",
-                color_discrete_map=color_map, text="total_products",
+                gold_df,
+                x="product_category",
+                y="total_products",
+                color="product_category",
+                color_discrete_map=color_map,
+                text="total_products",
             )
             fig.update_traces(textposition="outside", marker_line_width=0)
             fig.update_layout(
-                showlegend=False, plot_bgcolor=CHART_SURFACE, paper_bgcolor=CHART_SURFACE,
-                xaxis_title="Product Category", yaxis_title="Total Products", margin=dict(t=10),
+                showlegend=False,
+                plot_bgcolor=CHART_SURFACE,
+                paper_bgcolor=CHART_SURFACE,
+                xaxis_title="Product Category",
+                yaxis_title="Total Products",
+                margin=dict(t=10),
             )
             apply_dark_axes(fig)
             st.plotly_chart(fig, use_container_width=True)
@@ -835,13 +920,21 @@ with tab_gold:
         with g2:
             st.subheader("Average Rating by Category (Gold)")
             fig = px.bar(
-                gold_df, x="product_category", y="average_rating", color="product_category",
-                color_discrete_map=color_map, text_auto=".2f",
+                gold_df,
+                x="product_category",
+                y="average_rating",
+                color="product_category",
+                color_discrete_map=color_map,
+                text_auto=".2f",
             )
             fig.update_traces(marker_line_width=0)
             fig.update_layout(
-                showlegend=False, plot_bgcolor=CHART_SURFACE, paper_bgcolor=CHART_SURFACE,
-                xaxis_title="Product Category", yaxis_title="Avg. Rating (out of 5)", margin=dict(t=10),
+                showlegend=False,
+                plot_bgcolor=CHART_SURFACE,
+                paper_bgcolor=CHART_SURFACE,
+                xaxis_title="Product Category",
+                yaxis_title="Avg. Rating (out of 5)",
+                margin=dict(t=10),
             )
             apply_dark_axes(fig)
             st.plotly_chart(fig, use_container_width=True)
@@ -853,7 +946,9 @@ with tab_gold:
 with tab_catalog:
     st.subheader("📋 Product Catalog (silver_products)")
     fc1, fc2 = st.columns(2)
-    filter_cats = fc1.multiselect("Filter by category", sorted(products_df["product_category"].unique()))
+    filter_cats = fc1.multiselect(
+        "Filter by category", sorted(products_df["product_category"].unique())
+    )
     filter_tiers = fc2.multiselect("Filter by price tier", PRICE_TIER_ORDER)
 
     table_df = products_df
@@ -864,8 +959,18 @@ with tab_catalog:
 
     st.dataframe(
         table_df.sort_values("silver_load_timestamp", ascending=False)[
-            ["product_id", "product_name", "price", "price_category", "product_category",
-             "rating_rate", "rating_count", "rating_category", "data_source", "etl_load_timestamp"]
+            [
+                "product_id",
+                "product_name",
+                "price",
+                "price_category",
+                "product_category",
+                "rating_rate",
+                "rating_count",
+                "rating_category",
+                "data_source",
+                "etl_load_timestamp",
+            ]
         ],
         use_container_width=True,
         hide_index=True,

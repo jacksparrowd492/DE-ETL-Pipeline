@@ -18,9 +18,7 @@ load_dotenv()
 
 class Config:
     # FakeStore API
-    FAKESTORE_API_URL = os.getenv(
-        "FAKESTORE_API_URL", "https://fakestoreapi.com/products"
-    )
+    FAKESTORE_API_URL = os.getenv("FAKESTORE_API_URL", "https://fakestoreapi.com/products")
 
     # Databricks
     DATABRICKS_SERVER_HOSTNAME = os.getenv("DATABRICKS_SERVER_HOSTNAME")

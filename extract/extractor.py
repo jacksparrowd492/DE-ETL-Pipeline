@@ -14,10 +14,7 @@ from config import config
 # Configure Logger
 # --------------------------------------------------------
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +22,7 @@ logger = logging.getLogger(__name__)
 # --------------------------------------------------------
 # Extract Products
 # --------------------------------------------------------
+
 
 def extract_products():
     """
@@ -40,10 +38,7 @@ def extract_products():
 
         products = response.json()
 
-        logger.info(
-            "Extracted %s products from FakeStore API.",
-            len(products)
-        )
+        logger.info("Extracted %s products from FakeStore API.", len(products))
 
         return products
 

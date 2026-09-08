@@ -23,6 +23,7 @@ from transform.transformer import (
 # normalize_category
 # --------------------------------------------------------
 
+
 @pytest.mark.parametrize(
     "raw, expected",
     [
@@ -52,14 +53,15 @@ def test_normalize_category_unknown_single_word():
 # classify_price
 # --------------------------------------------------------
 
+
 @pytest.mark.parametrize(
     "price, expected",
     [
         (0, "Budget"),
         (49.99, "Budget"),
-        (50, "Standard"),       # lower boundary is inclusive on the Standard side
+        (50, "Standard"),  # lower boundary is inclusive on the Standard side
         (99.99, "Standard"),
-        (100, "Premium"),       # lower boundary is inclusive on the Premium side
+        (100, "Premium"),  # lower boundary is inclusive on the Premium side
         (500, "Premium"),
     ],
 )
@@ -70,6 +72,7 @@ def test_classify_price(price, expected):
 # --------------------------------------------------------
 # classify_value_segment
 # --------------------------------------------------------
+
 
 @pytest.mark.parametrize(
     "price, expected",
@@ -88,6 +91,7 @@ def test_classify_value_segment(price, expected):
 # --------------------------------------------------------
 # classify_rating
 # --------------------------------------------------------
+
 
 @pytest.mark.parametrize(
     "rating, expected",
@@ -110,6 +114,7 @@ def test_classify_rating(rating, expected):
 # transform_product
 # --------------------------------------------------------
 
+
 def test_transform_product_maps_all_fields(raw_product):
     result = transform_product(raw_product)
 
@@ -131,10 +136,19 @@ def test_transform_product_expected_keys(raw_product):
     result = transform_product(raw_product)
 
     assert set(result.keys()) == {
-        "product_id", "product_name", "product_category", "price",
-        "price_category", "rating_rate", "rating_count",
-        "product_description", "image_url", "data_source",
-        "etl_load_timestamp", "rating_category", "product_value_segment",
+        "product_id",
+        "product_name",
+        "product_category",
+        "price",
+        "price_category",
+        "rating_rate",
+        "rating_count",
+        "product_description",
+        "image_url",
+        "data_source",
+        "etl_load_timestamp",
+        "rating_category",
+        "product_value_segment",
     }
 
 

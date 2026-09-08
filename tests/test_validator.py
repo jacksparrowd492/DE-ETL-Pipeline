@@ -13,6 +13,7 @@ from validation.validator import is_valid_product, validate_products
 # is_valid_product
 # --------------------------------------------------------
 
+
 def test_is_valid_product_accepts_well_formed_product(raw_product):
     assert is_valid_product(raw_product) is True
 
@@ -53,6 +54,7 @@ def test_is_valid_product_accepts_zero_price(raw_product):
 # --------------------------------------------------------
 # validate_products
 # --------------------------------------------------------
+
 
 def test_validate_products_filters_out_invalid_records(raw_products):
     result = validate_products(raw_products)

@@ -29,6 +29,7 @@ def _fake_conn_and_cursor(mocker):
 # load_to_staging - happy path
 # --------------------------------------------------------
 
+
 def test_load_to_staging_inserts_into_bronze_and_silver(mocker, transformed_product):
     fake_conn, fake_cursor = _fake_conn_and_cursor(mocker)
     mocker.patch("load.databricks_loader.get_connection", return_value=fake_conn)
@@ -56,6 +57,7 @@ def test_load_to_staging_bronze_insert_matches_column_count(mocker, transformed_
 # load_to_staging - failure path
 # --------------------------------------------------------
 
+
 def test_load_to_staging_saves_failed_record_and_reraises(mocker, transformed_product, tmp_path):
     fake_conn, fake_cursor = _fake_conn_and_cursor(mocker)
     fake_cursor.execute.side_effect = RuntimeError("insert failed")
@@ -80,6 +82,7 @@ def test_load_to_staging_saves_failed_record_and_reraises(mocker, transformed_pr
 # --------------------------------------------------------
 # save_failed_record
 # --------------------------------------------------------
+
 
 def test_save_failed_record_appends_to_existing_file(mocker, transformed_product, tmp_path):
     failed_file = tmp_path / "failed_products.json"
