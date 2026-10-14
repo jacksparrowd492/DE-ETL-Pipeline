@@ -117,3 +117,80 @@ def test_get_consumer_is_lazy_and_cached(mocker):
 
     fake_kafka_consumer_cls.assert_called_once()
     assert first is second
+
+
+# --------------------------------------------------------
+# Phase II: latency metric/alert, crash alert, lineage events
+# --------------------------------------------------------
+
+
+def _jsonl(path):
+    import json
+
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+
+def test_end_to_end_latency_from_the_producers_ingestion_time():
+    from datetime import datetime, timedelta, timezone
+
+    from kafka1.consumer import end_to_end_latency
+
+    sent = (datetime.now(timezone.utc) - timedelta(seconds=42)).replace(tzinfo=None)
+    assert 41 <= end_to_end_latency({"ingestion_time": sent.isoformat()}) <= 45
+    assert end_to_end_latency({}) is None
+    assert end_to_end_latency({"ingestion_time": "not a date"}) is None
+
+
+def test_consumer_alerts_when_latency_exceeds_the_threshold(
+    mocker, raw_product, isolated_observability, monkeypatch
+):
+    from datetime import datetime, timedelta, timezone
+
+    monkeypatch.setenv("LATENCY_ALERT_SECONDS", "60")
+    _patch_pipeline(mocker)
+    old = (datetime.now(timezone.utc) - timedelta(minutes=10)).replace(tzinfo=None).isoformat()
+    late = dict(raw_product, ingestion_time=old)
+
+    consume(consumer=_FakeConsumer([_FakeMessage(late), _FakeMessage(late)]))
+
+    alerts = _jsonl(isolated_observability / "alerts.jsonl")
+    assert [a["title"] for a in alerts] == ["Pipeline latency: Kafka -> Databricks is behind"]
+    latencies = [
+        m
+        for m in _jsonl(isolated_observability / "metrics.jsonl")
+        if m["name"] == "kafka_end_to_end_latency_seconds"
+    ]
+    assert len(latencies) == 2 and latencies[0]["value"] > 590
+
+
+def test_consumer_crash_sends_a_critical_alert_and_fail_lineage(
+    mocker, raw_product, isolated_observability
+):
+    mocks = _patch_pipeline(mocker)
+    mocks["load_to_staging"].side_effect = RuntimeError("Databricks write failed")
+
+    consume(consumer=_FakeConsumer([_FakeMessage(raw_product)]))
+
+    [alert] = _jsonl(isolated_observability / "alerts.jsonl")
+    assert alert["severity"] == "critical"
+    assert "Databricks write failed" in alert["message"]
+    events = _jsonl(isolated_observability / "lineage" / "openlineage.jsonl")
+    assert [e["eventType"] for e in events] == ["START", "START", "FAIL", "FAIL"]
+    failed = [
+        m
+        for m in _jsonl(isolated_observability / "metrics.jsonl")
+        if m["name"] == "consumer_messages"
+    ]
+    assert failed[0]["labels"] == {"status": "failed"}
+
+
+def test_clean_stop_completes_lineage(mocker, raw_product, isolated_observability):
+    _patch_pipeline(mocker)
+
+    consume(consumer=_FakeConsumer([_FakeMessage(raw_product)]))
+
+    events = _jsonl(isolated_observability / "lineage" / "openlineage.jsonl")
+    assert [e["eventType"] for e in events][-2:] == ["COMPLETE", "COMPLETE"]
+    assert _jsonl(isolated_observability / "alerts.jsonl") == []

@@ -1,0 +1,123 @@
+name: Deploy (AWS)
+
+# Manual only: Actions -> "Deploy (AWS)" -> Run workflow. Plans by default; applies and
+# ships code only when "apply" is ticked. Each target is a GitHub Environment (dev /
+# staging / prod) holding its own variables and secret, so prod can require a reviewer
+# (Settings -> Environments -> prod -> Required reviewers). See deploy/README.md.
+#
+# Per-environment configuration (Settings -> Environments -> <env>):
+#   secret   AWS_DEPLOY_ROLE_ARN   IAM role trusted for GitHub OIDC (no stored AWS keys)
+#   vars     AWS_REGION, TF_STATE_BUCKET, VPC_ID,
+#            PRIVATE_SUBNET_IDS    JSON list, e.g. ["subnet-0a...","subnet-0b..."]
+#            ALERT_EMAIL, CREATE_MWAA, CREATE_CONSUMER_HOST (true/false)
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: choice
+        options: [dev, staging, prod]
+        default: dev
+      apply:
+        description: Apply the plan and upload the code (unticked = plan only)
+        type: boolean
+        default: false
+      restart_stream:
+        description: Restart the streaming job on EMR Serverless (resumes from its checkpoint)
+        type: boolean
+        default: false
+
+permissions:
+  id-token: write # GitHub OIDC -> AWS STS
+  contents: read
+
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false # never interrupt a running apply
+
+jobs:
+  deploy:
+    name: Deploy to ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Gate - tests, config and lineage checks
+        run: |
+          pytest -q
+          python scripts/validate_config.py
+          python -m governance.lineage validate
+          python -m governance.lineage docs --check
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.5"
+          terraform_wrapper: false
+
+      - name: Terraform init
+        working-directory: deploy/terraform/aws
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="key=fakestore-etl/${{ inputs.environment }}.tfstate" \
+            -backend-config="region=${{ vars.AWS_REGION }}" \
+            -backend-config="use_lockfile=true"
+
+      - name: Write tfvars for ${{ inputs.environment }}
+        working-directory: deploy/terraform/aws
+        env:
+          SUBNETS: ${{ vars.PRIVATE_SUBNET_IDS }}
+        run: |
+          cat > ci.tfvars <<EOF
+          environment          = "${{ inputs.environment }}"
+          region               = "${{ vars.AWS_REGION }}"
+          vpc_id               = "${{ vars.VPC_ID }}"
+          private_subnet_ids   = ${SUBNETS}
+          alert_email          = "${{ vars.ALERT_EMAIL }}"
+          create_mwaa          = ${{ vars.CREATE_MWAA || 'false' }}
+          create_consumer_host = ${{ vars.CREATE_CONSUMER_HOST || 'false' }}
+          EOF
+
+      - name: Terraform plan
+        working-directory: deploy/terraform/aws
+        run: terraform plan -input=false -var-file=ci.tfvars -out=tf.plan
+
+      - name: Terraform apply
+        if: inputs.apply
+        working-directory: deploy/terraform/aws
+        run: terraform apply -input=false tf.plan
+
+      - name: Upload code, DAGs and consumer bundle
+        if: inputs.apply
+        run: bash deploy/aws/deploy.sh upload
+
+      - name: Restart the streaming job
+        if: inputs.apply && inputs.restart_stream
+        run: bash deploy/aws/deploy.sh start-stream
+
+      - name: Redeploy the consumer host
+        if: inputs.apply && vars.CREATE_CONSUMER_HOST == 'true'
+        run: bash deploy/aws/deploy.sh restart-consumer

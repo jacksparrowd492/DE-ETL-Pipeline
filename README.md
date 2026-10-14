@@ -12,11 +12,27 @@ extract/  -> validation/  -> kafka1/ (producer/consumer)  -> load/ (Databricks) 
 
 Orchestrated as an Airflow DAG in [fakestore_pipeline.py](fakestore_pipeline.py).
 
+## Phase II: deployment, monitoring and governance
+
+| Requirement | Where | Details |
+|---|---|---|
+| Logging integrated into the pipeline | [observability/logging_config.py](observability/logging_config.py) | console + rotating `logs/<component>.log` / `.jsonl`, every line tagged with the run id and task |
+| Email / Slack alerts for task failures | [observability/alerts.py](observability/alerts.py), DAG callbacks | Slack webhook, SMTP email, Amazon SNS, always `logs/alerts.jsonl`; Airflow `on_failure_callback` / `on_retry_callback` |
+| Metrics, latency and failure alerts | [observability/metrics.py](observability/metrics.py), [observability/stream_health.py](observability/stream_health.py) | task duration vs SLA, Kafka → Databricks latency, stream p95 latency / reject ratio / trigger time; JSON-lines + Prometheus |
+| Data lineage of the final tables | [governance/lineage.py](governance/lineage.py) → [docs/LINEAGE.md](docs/LINEAGE.md) | table + column lineage for bronze/silver/dim/fact/gold, the Delta tables and Trino views; OpenLineage events per run; CI-checked against the code |
+| Cloud deployment | [deploy/](deploy/README.md), [.github/workflows/deploy.yml](.github/workflows/deploy.yml) | AWS: MSK, EMR Serverless, S3 + Glue, Athena (Trino), MWAA, CloudWatch alarms → SNS; Terraform, no Docker |
+| Monitoring UI | Streamlit **Monitoring** page | alerts, task durations vs SLA, latency, lineage graph per table |
+
+Guides: [docs/OBSERVABILITY.md](docs/OBSERVABILITY.md) (what is logged, alerted and measured,
+and how to configure Slack/email) and [deploy/README.md](deploy/README.md) (deployment strategy).
+Both orchestrators run the same instrumented steps from [pipeline_tasks.py](pipeline_tasks.py).
+
 ## Setup
 
 ```bash
 pip install -r requirements.txt
 cp .env.example .env   # fill in your Databricks + Kafka values
+                       # optional: SLACK_WEBHOOK_URL / SMTP_* for alerts (docs/OBSERVABILITY.md)
 ```
 
 ## Running tests
@@ -24,7 +40,7 @@ cp .env.example .env   # fill in your Databricks + Kafka values
 ```bash
 pip install -r requirements-dev.txt
 pytest                                   # run the unit test suite
-pytest --cov=transform --cov=validation --cov=extract --cov=kafka1 --cov=load --cov-report=term-missing
+pytest --cov=transform --cov=validation --cov=extract --cov=kafka1 --cov=load --cov=maintenance        --cov=observability --cov=governance --cov=pipeline_tasks --cov-report=term-missing
 ```
 
 Tests live in [tests/](tests/):
@@ -34,6 +50,18 @@ Tests live in [tests/](tests/):
 - `test_extractor.py`, `test_producer.py`, `test_databricks_loader.py` —
   mock tests: HTTP calls, the Kafka producer, and the Databricks connection
   are all patched, so the suite never hits a real API, broker, or warehouse.
+- `test_lakehouse_ops.py`, `test_benchmark.py` — Week 4 table maintenance:
+  compaction, snapshot expiry and vacuum run against tiny real Delta tables
+  in a temp directory; the Trino benchmark runs against a fake cursor.
+- `test_observability.py`, `test_lineage.py`, `test_pipeline_tasks.py`,
+  `test_replay.py` — Phase II: logging with run context, Slack/email/SNS alerts
+  (HTTP/SMTP patched), alert dedup, metrics files, task SLA and failure alerts,
+  stream health checks, the lineage registry against the code, OpenLineage
+  events, and the instrumented pipeline steps end to end. A conftest fixture
+  points `LOG_DIR` at a temp folder, so tests never write to `logs/`.
+- `test_maintenance_dags.py` — DAG integrity checks for the maintenance DAGs.
+  Skipped where Airflow cannot be imported (native Windows, CI); run it in
+  the WSL Airflow venv (see [maintenance/README.md](maintenance/README.md)).
 - `test_unittest_suite.py` — the same transformation/validation logic,
   exercised with a plain `unittest.TestCase` suite (no pytest fixtures), to
   prove the tests aren't tied to the pytest runner:
@@ -134,23 +162,35 @@ scheduler/XCom.
    streamlit run streamlit_app.py
    ```
 
+## Streaming lakehouse (Weeks 2–4)
+
+A second, Databricks-free path: Kafka events -> Spark Structured Streaming ->
+local Delta Lake tables -> Trino -> Metabase. Runs natively in WSL, no Docker.
+
+| Folder | Week | What it does |
+|---|---|---|
+| [streaming/](streaming/README.md) | 2 | Spark streams Kafka events into the Delta tables `user_events` / `user_events_rejected` |
+| [serving/](serving/README.md) | 3 | Trino 483 over the Delta tables, Metabase dashboard |
+| [maintenance/](maintenance/README.md) | 4 | Airflow DAGs for compaction (bin-packing), snapshot expiry and vacuum; Trino benchmark before vs after |
+
 ## Continuous Integration
 
 [.github/workflows/ci.yml](.github/workflows/ci.yml) runs on every push/PR
-to `main` and `develop` as six jobs, gated in this order:
+to `main` and `develop` as seven jobs, gated in this order:
 
 ```
-Lint & Format ──┐
-                ├──> Unit Tests (3.10, 3.12) ──┬──> Coverage Gate (>=70%) ──┐
-Config Validation ──────────────────────────────┴──> Integration Tests ────┴──> CI Complete
+Lint & Format ──┬──> Unit Tests (3.10, 3.12) ──┬──> Coverage Gate (>=70%) ──┐
+                └──> Deploy Config ────────────┼────────────────────────────┤
+Config Validation ─────────────────────────────┴──> Integration Tests ──────┴──> CI Complete
 ```
 
 | Job | What it checks |
 |---|---|
 | **Lint & Format** | `ruff check .` + `ruff format --check .` — see [ruff.toml](ruff.toml) for the (deliberately practical) rule scope. |
-| **Config Validation** | [scripts/validate_config.py](scripts/validate_config.py) — `.env.example` covers every key `config.py` reads, `requirements-dev.txt` stays in sync with `requirements.txt`, `pytest.ini`'s `testpaths` exists, and the workflow YAML itself parses. |
+| **Config Validation** | [scripts/validate_config.py](scripts/validate_config.py) — `.env.example` covers every key the code reads (`config.py`, `observability/`, `governance/`, the consumer and pipeline steps), `requirements-dev.txt` stays in sync with `requirements.txt`, `pytest.ini`'s `testpaths` exists, and the workflow YAML files parse. Then `python -m governance.lineage validate` (the lineage registry matches the loaders' columns and DDL) and `docs --check` (docs/LINEAGE.md is regenerated). |
 | **Unit Tests** | `pytest -q` on Python 3.10 and 3.12 — the full suite in [tests/](tests/). |
-| **Coverage Gate (>=70%)** | Re-runs the suite with `--cov-fail-under=70` across `transform`, `validation`, `extract`, `kafka1`, `load`. |
+| **Coverage Gate (>=70%)** | Re-runs the suite with `--cov-fail-under=70` across `transform`, `validation`, `extract`, `kafka1`, `load`, `maintenance`, `observability`, `governance`, `pipeline_tasks`. |
+| **Deploy Config** | `terraform fmt -check` + `terraform validate` on [deploy/terraform/aws](deploy/terraform/aws), the deploy shell scripts parse, and `deploy/package.py` builds the artifacts. |
 | **Integration Tests** | Runs [run_local.py](run_local.py) for real against the live FakeStore API (extract -> validate -> transform, no mocks) and asserts `data/output.csv` was written with rows in it — this is what actually distinguishes it from the mocked unit tests. |
 | **CI Complete** | A single gate job depending on the rest — point branch protection at this one job instead of listing every job individually. |
 
@@ -162,10 +202,17 @@ pip install -r requirements-dev.txt
 ruff check .                      # Lint
 ruff format --check .             # Format
 python scripts/validate_config.py # Config Validation
+python -m governance.lineage validate && python -m governance.lineage docs --check
 pytest -q                         # Unit Tests
-pytest -q --cov=transform --cov=validation --cov=extract --cov=kafka1 --cov=load --cov-fail-under=70
+pytest -q --cov=transform --cov=validation --cov=extract --cov=kafka1 --cov=load --cov=maintenance \
+  --cov=observability --cov=governance --cov=pipeline_tasks --cov-fail-under=70
 python run_local.py               # Integration Tests
+python deploy/package.py --no-deps  # Deploy Config (plus terraform fmt/validate if installed)
 ```
+
+Deployment is a separate, manual workflow:
+[.github/workflows/deploy.yml](.github/workflows/deploy.yml) (**Deploy (AWS)**) — see
+[deploy/README.md](deploy/README.md).
 
 ## Outputs
 
@@ -173,13 +220,21 @@ python run_local.py               # Integration Tests
   `python run_local.py` (see [Local end-to-end run](#local-end-to-end-run-proves-the-pipeline-processes-real-data)
   above); gitignored since it's a run artifact, regenerated on every run.
   It's also what the Integration Tests CI job verifies gets produced.
-- **Unit test results:** all tests passing — 79 tests via `pytest -q`, and
-  the same core logic independently verified via
+- **Unit test results:** all tests passing — 176 tests via `pytest -q`, 92 %
+  coverage (plus the Airflow-only DAG tests, which are skipped outside the WSL
+  venv), and the same core logic independently verified via
   `python -m unittest discover tests` (6 tests, no pytest dependency).
+- **Observability output:** `logs/<component>.{log,jsonl}`, `logs/alerts.jsonl`,
+  `logs/metrics.jsonl`, `logs/metrics_<component>.prom` and
+  `logs/lineage/openlineage.jsonl` (gitignored run artifacts), shown on the
+  Streamlit **Monitoring** page.
+- **Data lineage:** [docs/LINEAGE.md](docs/LINEAGE.md), generated from
+  [governance/lineage.py](governance/lineage.py).
 - **CI/CD:** GitHub Actions ([.github/workflows/ci.yml](.github/workflows/ci.yml))
   validates every commit and pull request against `main`/`develop` through
-  the six jobs above — lint/format, config shape, unit tests (Python 3.10
-  and 3.12), a >=70% coverage gate, and a live-API integration test.
+  the seven jobs above — lint/format, config + lineage checks, unit tests
+  (Python 3.10 and 3.12), a >=70% coverage gate, an integration test and the
+  deploy config; [deploy.yml](.github/workflows/deploy.yml) deploys to AWS.
 
 ## Git workflow
 

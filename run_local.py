@@ -22,10 +22,10 @@ import os
 import sys
 
 from extract.extractor import extract_products
+from observability import run_context, setup_logging, track_task
+from observability.logging_config import new_run_id
 from validation.validator import validate_products
 from transform.transformer import transform_product
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 
 logger = logging.getLogger(__name__)
 
@@ -50,24 +50,33 @@ CSV_COLUMNS = (
 
 
 def run():
-    logger.info("Extracting products from FakeStore API...")
-    raw_products = extract_products()
-    logger.info("Extracted %s raw products.", len(raw_products))
+    with run_context(run_id=new_run_id()):
+        with track_task("extract", sla_seconds=30) as t:
+            logger.info("Extracting products from FakeStore API...")
+            raw_products = extract_products()
+            logger.info("Extracted %s raw products.", len(raw_products))
+            t.count("records_out", len(raw_products))
 
-    validated = validate_products(raw_products)
-    logger.info(
-        "Validated %s products (%s dropped).", len(validated), len(raw_products) - len(validated)
-    )
+        with track_task("validate", sla_seconds=10) as t:
+            validated = validate_products(raw_products)
+            logger.info(
+                "Validated %s products (%s dropped).",
+                len(validated),
+                len(raw_products) - len(validated),
+            )
+            t.count("records_out", len(validated))
 
-    transformed = [transform_product(p, data_source="Local Run") for p in validated]
+        with track_task("transform_to_csv", sla_seconds=10) as t:
+            transformed = [transform_product(p, data_source="Local Run") for p in validated]
 
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+            os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    with open(OUTPUT_FILE, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=CSV_COLUMNS)
-        writer.writeheader()
-        for row in transformed:
-            writer.writerow(row)
+            with open(OUTPUT_FILE, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=CSV_COLUMNS)
+                writer.writeheader()
+                for row in transformed:
+                    writer.writerow(row)
+            t.count("records_out", len(transformed))
 
     logger.info("Wrote %s transformed rows to %s", len(transformed), OUTPUT_FILE)
     print(f"\nDone. {len(transformed)} rows written to {OUTPUT_FILE}")
@@ -76,6 +85,7 @@ def run():
 
 
 if __name__ == "__main__":
+    setup_logging("run_local")
     try:
         run()
     except Exception as e:

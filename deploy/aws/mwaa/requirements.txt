@@ -1,0 +1,7 @@
+# Python packages for the MWAA environment (Airflow 3.0.6, Python 3.12). MWAA installs
+# them with the official constraints; the Amazon provider (EMR Serverless operator) and
+# boto3/botocore (needed by kafka-python's AWS_MSK_IAM auth) are preinstalled.
+--constraint "https://raw.githubusercontent.com/apache/airflow/constraints-3.0.6/constraints-3.12.txt"
+kafka-python
+databricks-sql-connector
+python-dotenv

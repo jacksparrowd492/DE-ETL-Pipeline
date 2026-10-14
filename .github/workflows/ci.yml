@@ -40,11 +40,18 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install PyYAML
-        run: pip install pyyaml
+      - name: Install dependencies
+        # the lineage check imports the loaders to read their column lists
+        run: pip install -r requirements.txt pyyaml
 
       - name: Validate config shape
         run: python scripts/validate_config.py
+
+      - name: Validate data lineage against the code
+        run: python -m governance.lineage validate
+
+      - name: Check docs/LINEAGE.md is regenerated
+        run: python -m governance.lineage docs --check
 
   unit-tests:
     name: Unit Tests
@@ -91,6 +98,7 @@ jobs:
       - name: Enforce coverage threshold
         run: |
           pytest -q --cov=transform --cov=validation --cov=extract --cov=kafka1 --cov=load \
+            --cov=maintenance --cov=observability --cov=governance --cov=pipeline_tasks \
             --cov-report=term-missing --cov-fail-under=70
 
   integration-tests:
@@ -136,10 +144,46 @@ jobs:
           test -s data/output.csv
           echo "Rows written: $(($(wc -l < data/output.csv) - 1))"
 
+  deploy-config:
+    name: Deploy Config
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.5"
+          terraform_wrapper: false
+
+      - name: Terraform fmt
+        run: terraform -chdir=deploy/terraform/aws fmt -check -recursive
+
+      - name: Terraform validate
+        run: |
+          terraform -chdir=deploy/terraform/aws init -backend=false -input=false
+          terraform -chdir=deploy/terraform/aws validate
+
+      - name: Shell scripts parse
+        run: |
+          bash -n deploy/aws/deploy.sh
+          bash -n deploy/aws/consumer_user_data.sh.tpl
+          sh -n deploy/aws/mwaa/startup.sh.tpl
+
+      - name: Build deploy artifacts (code only)
+        run: python deploy/package.py --no-deps
+
   ci-complete:
     name: CI Complete
-    needs: [config-validation, coverage-gate, integration-tests]
+    needs: [config-validation, coverage-gate, integration-tests, deploy-config]
     runs-on: ubuntu-latest
     steps:
       - name: All checks passed
-        run: echo "Lint, config validation, unit tests, coverage gate and integration tests all passed."
+        run: echo "Lint, config + lineage validation, unit tests, coverage gate, integration tests and deploy config all passed."

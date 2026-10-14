@@ -33,11 +33,33 @@ class Config:
     KAFKA_BOOTSTRAP_SERVER = os.getenv("KAFKA_BOOTSTRAP_SERVER")
     KAFKA_TOPIC = os.getenv("KAFKA_TOPIC")
 
+    # Kafka security: empty = PLAINTEXT (the local broker). Amazon MSK with IAM
+    # auth (deploy/README.md): SASL_SSL + AWS_MSK_IAM, which needs botocore.
+    KAFKA_SECURITY_PROTOCOL = os.getenv("KAFKA_SECURITY_PROTOCOL")
+    KAFKA_SASL_MECHANISM = os.getenv("KAFKA_SASL_MECHANISM")
+
+    # Trino (serving/): the Streamlit Product Activity page reads user events from
+    # delta.lakehouse there. Trino runs in WSL; localhost reaches it from Windows.
+    TRINO_HOST = os.getenv("TRINO_HOST", "localhost")
+    TRINO_PORT = int(os.getenv("TRINO_PORT") or 8080)
+    TRINO_USER = os.getenv("TRINO_USER", "streamlit")
+
 
 def table(name: str) -> str:
     """Fully-qualified Unity Catalog table name, e.g. table("bronze_products")
     -> "fakestore_catalog.etl_project.bronze_products"."""
     return f"{Config.DATABRICKS_CATALOG}.{Config.DATABRICKS_SCHEMA}.{name}"
+
+
+def kafka_security_kwargs() -> dict:
+    """Extra KafkaProducer / KafkaConsumer settings for a secured cluster;
+    {} for a plain local broker, so local behaviour is unchanged."""
+    kwargs = {}
+    if Config.KAFKA_SECURITY_PROTOCOL:
+        kwargs["security_protocol"] = Config.KAFKA_SECURITY_PROTOCOL
+    if Config.KAFKA_SASL_MECHANISM:
+        kwargs["sasl_mechanism"] = Config.KAFKA_SASL_MECHANISM
+    return kwargs
 
 
 config = Config()
