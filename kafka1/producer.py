@@ -24,6 +24,8 @@ from dotenv import load_dotenv
 from kafka import KafkaProducer
 from kafka.errors import KafkaError
 
+from config import kafka_security_kwargs
+
 # --------------------------------------------------
 # Load Environment Variables
 # --------------------------------------------------
@@ -34,10 +36,8 @@ BOOTSTRAP_SERVER = os.getenv("KAFKA_BOOTSTRAP_SERVER")
 TOPIC = os.getenv("KAFKA_TOPIC")
 
 # --------------------------------------------------
-# Configure Logger
+# Logger (handlers are configured by the entry point: observability.setup_logging)
 # --------------------------------------------------
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 
 logger = logging.getLogger("KafkaProducer")
 
@@ -61,6 +61,7 @@ def get_producer() -> KafkaProducer:
             value_serializer=lambda value: json.dumps(value).encode("utf-8"),
             retries=5,
             acks="all",
+            **kafka_security_kwargs(),
         )
 
     return _producer
@@ -147,7 +148,11 @@ def send_product(product: dict) -> bool:
 # --------------------------------------------------
 
 
-def send_products(products):
+def send_products(products) -> dict:
+    """
+    Sends every product and returns {"success": n, "failed": m}, so the
+    caller (pipeline_tasks.send_to_kafka) can alert on, or fail for, lost sends.
+    """
 
     success = 0
 
@@ -162,6 +167,8 @@ def send_products(products):
     get_producer().flush()
 
     logger.info("Batch Completed | Success=%s | Failed=%s", success, failed)
+
+    return {"success": success, "failed": failed}
 
 
 # --------------------------------------------------
@@ -183,6 +190,9 @@ def close_producer():
 # --------------------------------------------------
 
 if __name__ == "__main__":
+    from observability import setup_logging
+
+    setup_logging("producer")
     sample = {"id": 1, "title": "Laptop", "price": 599.99, "category": "electronics"}
 
     send_product(sample)

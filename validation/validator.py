@@ -7,10 +7,8 @@ Validates raw product records before they are sent to Kafka.
 import logging
 
 # --------------------------------------------------------
-# Configure Logger
+# Logger (handlers are configured by the entry point: observability.setup_logging)
 # --------------------------------------------------------
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +63,9 @@ def validate_products(products: list) -> list:
 # --------------------------------------------------------
 
 if __name__ == "__main__":
+    from observability import setup_logging
+
+    setup_logging("validate")
     sample = [
         {"id": 1, "title": "Laptop", "price": 599.99, "category": "electronics"},
         {"id": 2, "title": "", "price": 20, "category": "misc"},

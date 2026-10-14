@@ -23,10 +23,8 @@ from Data_Connection import get_connection
 from config import table
 
 # --------------------------------------------------------
-# Configure Logger
+# Logger (handlers are configured by the entry point: observability.setup_logging)
 # --------------------------------------------------------
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 
 logger = logging.getLogger(__name__)
 

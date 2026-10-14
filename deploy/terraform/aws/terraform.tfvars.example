@@ -1,0 +1,22 @@
+# Copy to dev.tfvars (gitignored) and fill in. Plan/apply:
+#   terraform init -backend-config=backend-dev.hcl
+#   terraform plan -var-file=dev.tfvars -out=dev.plan && terraform apply dev.plan
+
+environment = "dev"
+region      = "us-east-1"
+
+# An existing VPC with >= 2 private subnets (different AZs) behind a NAT gateway
+vpc_id             = "vpc-0123456789abcdef0"
+private_subnet_ids = ["subnet-0aaaaaaaaaaaaaaaa", "subnet-0bbbbbbbbbbbbbbbb"]
+
+alert_email = "you@example.com"
+
+create_msk           = true
+create_mwaa          = false # ~$0.49/h when on
+create_consumer_host = false
+
+# backend-dev.hcl (also gitignored):
+#   bucket       = "my-terraform-state-bucket"
+#   key          = "fakestore-etl/dev.tfstate"
+#   region       = "us-east-1"
+#   use_lockfile = true

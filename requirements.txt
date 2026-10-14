@@ -5,3 +5,4 @@ databricks-sql-connector
 kafka-python
 streamlit
 plotly
+trino

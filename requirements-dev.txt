@@ -5,3 +5,8 @@ pytest-mock
 pytest-cov
 ruff
 pyyaml
+
+# Week 4 maintenance tests (tests/test_lakehouse_ops.py, tests/test_benchmark.py)
+deltalake
+pyarrow
+trino

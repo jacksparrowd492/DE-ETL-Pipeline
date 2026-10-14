@@ -11,10 +11,8 @@ import requests
 from config import config
 
 # --------------------------------------------------------
-# Configure Logger
+# Logger (handlers are configured by the entry point: observability.setup_logging)
 # --------------------------------------------------------
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 
 logger = logging.getLogger(__name__)
 
@@ -52,5 +50,8 @@ def extract_products():
 # --------------------------------------------------------
 
 if __name__ == "__main__":
+    from observability import setup_logging
+
+    setup_logging("extract")
     data = extract_products()
     print(f"Extracted {len(data)} products")

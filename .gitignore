@@ -29,3 +29,34 @@ data/*.csv
 .idea/
 .DS_Store
 Thumbs.db
+
+# Spark streaming demo checkpoints
+streaming/_checkpoints/
+
+# Week 2 lakehouse: Delta tables, Hive Metastore (Derby), streaming checkpoint
+__pycache__/
+derby.log
+metastore_db/
+spark-warehouse/
+streaming/_lakehouse/
+
+# Week 3/4: service logs (Trino/Metabase/Airflow); benchmark results stay in git
+serving/logs/
+maintenance/logs/
+
+# Trino CLI executable jar (13 MB download, not source)
+/trino
+
+# Phase II: deploy build output and local Terraform state/config
+dist/
+deploy/terraform/**/.terraform/
+deploy/terraform/**/*.tfstate
+deploy/terraform/**/*.tfstate.*
+deploy/terraform/**/*.tfvars
+!deploy/terraform/**/terraform.tfvars.example
+deploy/terraform/**/backend-*.hcl
+deploy/terraform/**/*.plan
+
+# JVM crash dumps (Spark on Windows)
+hs_err_pid*.log
+replay_pid*.log

@@ -100,8 +100,31 @@ def test_send_products_counts_success_and_failure(mocker, raw_product):
 
     mocker.patch("kafka1.producer.get_producer", return_value=fake_producer)
 
-    send_products(batch)
+    result = send_products(batch)
 
     # Only the valid product should have reached the (mocked) broker.
+    assert result == {"success": 1, "failed": 1}
     assert fake_producer.send.call_count == 1
     fake_producer.flush.assert_called_once()
+
+
+def test_get_producer_adds_msk_iam_settings_when_configured(mocker, monkeypatch):
+    import config
+    import kafka1.producer as producer
+
+    monkeypatch.setattr(config.Config, "KAFKA_SECURITY_PROTOCOL", "SASL_SSL")
+    monkeypatch.setattr(config.Config, "KAFKA_SASL_MECHANISM", "AWS_MSK_IAM")
+    kafka_producer = mocker.patch("kafka1.producer.KafkaProducer")
+    mocker.patch("kafka1.producer._producer", None)
+
+    producer.get_producer()
+
+    kwargs = kafka_producer.call_args.kwargs
+    assert kwargs["security_protocol"] == "SASL_SSL"
+    assert kwargs["sasl_mechanism"] == "AWS_MSK_IAM"
+
+
+def test_local_broker_gets_no_security_settings():
+    from config import kafka_security_kwargs
+
+    assert kafka_security_kwargs() == {}
